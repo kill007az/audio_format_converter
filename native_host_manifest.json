@@ -1,0 +1,9 @@
+{
+  "name": "com.ytmp3.server",
+  "description": "YT-MP3 Server Launcher",
+  "path": "E:/EAG V3/audio_format_converter/native_host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://eikpmceimjdpalpojlgdniaemgeagblm/"
+  ]
+}
