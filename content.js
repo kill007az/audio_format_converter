@@ -43,14 +43,30 @@
       return;
     }
 
-    // Target: the actions row under the video title
-    const target = document.querySelector(
-      "#top-level-buttons-computed, ytd-menu-renderer.ytd-watch-metadata #top-level-buttons-computed"
-    );
+    // Try multiple selectors — YouTube changes its DOM frequently
+    const selectors = [
+      "ytd-watch-metadata #actions #top-level-buttons-computed",
+      "ytd-watch-metadata #actions-inner #top-level-buttons-computed",
+      "ytd-watch-metadata #top-level-buttons-computed",
+      "#top-level-buttons-computed",
+      "ytd-menu-renderer.ytd-watch-metadata #top-level-buttons-computed",
+      "ytd-watch-metadata #actions",
+      "ytd-watch-metadata #actions-inner",
+      "#above-the-fold #actions #top-level-buttons-computed",
+    ];
+
+    let target = null;
+    for (const sel of selectors) {
+      target = document.querySelector(sel);
+      if (target) {
+        console.log("[YT-MP3] Button target found via:", sel);
+        break;
+      }
+    }
 
     if (!target) {
-      // Retry — YouTube loads elements lazily
-      setTimeout(injectDownloadButton, 1000);
+      console.log("[YT-MP3] No target found yet, retrying...");
+      setTimeout(injectDownloadButton, 1500);
       return;
     }
 
