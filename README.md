@@ -6,7 +6,7 @@ A Chrome extension that converts YouTube videos to high-quality MP3 files using 
 
 ## Demo
 
-> 📹 **[Demo video coming soon]**
+> 📹 [**Demo video**](https://drive.google.com/file/d/1TQS_RvAUm-qISDU4UG0eH7LNiHSOjEeF/view?usp=sharing)
 <!-- Replace this line with your demo video link, e.g.:
 [![Demo Video](thumbnail_url)](youtube_or_loom_link)
 -->
