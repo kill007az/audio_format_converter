@@ -22,9 +22,11 @@ A Chrome extension that converts YouTube videos to high-quality MP3 files using 
   - Right-click a YouTube video link/thumbnail → *Download as MP3*
   - Click the injected **Download MP3** button below any playing video
 
-- **Live job tracking panel** — see all conversions in real time with status badges (`converting`, `done`, `error`, `cancelled`)
+- **Live job tracking panel** — see all conversions in real time with status badges (`converting`, `queued`, `done`, `error`, `cancelled`)
 
-- **Stop individual jobs** mid-conversion
+- **Conversion queue** — multiple requests are processed one at a time to avoid YouTube rate-limiting; queued jobs show a "Waiting in queue..." status and can be cancelled before they start
+
+- **Stop individual jobs** mid-conversion (works on both `converting` and `queued` jobs)
 
 - **Save individual MP3s** via native Windows Save As dialog
 
@@ -161,6 +163,9 @@ After completing the one-time setup, just use the extension — it will **automa
 │  ├───────────────────────────────┤  │
 │  │ Another Song  [CONVERTING][Stop] │
 │  │ 12s elapsed                   │  │
+│  ├───────────────────────────────┤  │
+│  │ Third Song     [QUEUED] [Stop]│  │
+│  │ Waiting in queue...           │  │
 │  └───────────────────────────────┘  │
 │  [ Save All (2 .zip) ] [Clear List] │
 ├─────────────────────────────────────┤
@@ -174,7 +179,7 @@ After completing the one-time setup, just use the extension — it will **automa
 |--------|--------|
 | **Convert** | Start a new conversion from the URL input |
 | **Save** | Opens Windows Save As dialog for one MP3 |
-| **Stop** | Cancels an in-progress conversion |
+| **Stop** | Cancels a converting or queued conversion |
 | **Save All (.zip)** | Bundles all completed MP3s into a ZIP, opens Save As dialog |
 | **Clear List** | Removes all finished jobs and deletes temp files |
 | **Kill** | Shuts down the local server immediately |
@@ -221,7 +226,7 @@ The Flask server exposes the following endpoints on `http://localhost:5000`:
 | `/health` | GET | — | Server status, idle time, shutdown countdown |
 | `/convert` | POST | `{"url": "..."}` | Start a conversion; returns `job_id` |
 | `/jobs` | GET | — | All active and recent jobs |
-| `/cancel` | POST | `{"job_id": "..."}` | Cancel an in-progress conversion |
+| `/cancel` | POST | `{"job_id": "..."}` | Cancel a converting or queued conversion |
 | `/download` | GET | `?token=...` | Download a completed MP3 |
 | `/download-zip` | POST | `{"tokens": [...]}` | Download multiple MP3s as a ZIP |
 | `/clear-jobs` | POST | — | Remove all finished jobs and temp files |
@@ -235,10 +240,17 @@ The Flask server exposes the following endpoints on `http://localhost:5000`:
 User submits URL
        │
        ▼
+  [queued] ───────────────────────────────► [cancelled]
+  "Waiting in queue..."   (user stops)
+       │
+  Previous job finishes; lock acquired
+       │
+       ▼
   [converting] ──────────────────────────► [cancelled]
   "Fetching..."        (user stops)
        │
-  yt-dlp downloads + ffmpeg encodes
+  yt-dlp downloads single video (noplaylist)
+  + ffmpeg encodes to MP3 @ 192kbps
        │
   ┌────┴────┐
   ▼         ▼
@@ -302,6 +314,9 @@ Run `install_native_host.bat` again and make sure the extension ID matches exact
 
 ### Right-click option doesn't appear on thumbnails
 The context menu only appears when right-clicking **links** (anchor elements) that point to YouTube watch/shorts URLs, not on every thumbnail image.
+
+### Conversion stuck on "Fetching..." for a very long time
+YouTube sometimes appends `&list=...&start_radio=1` to a video URL when you click it from search results or autoplay. The extension strips this automatically — only the single video (`v=` param) is downloaded. If you're pasting a URL manually, make sure it points to a single video (`watch?v=`) rather than a playlist or channel page.
 
 ### "Token expired" when trying to download
 Completed files are only kept for 5 minutes. Start a new conversion if the token has expired.
