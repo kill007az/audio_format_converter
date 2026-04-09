@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import uuid
 import time
 import zipfile
@@ -289,8 +290,15 @@ def download_zip():
     if not token_list:
         return jsonify({"error": "No tokens provided"}), 400
 
+    def _safe_name(name):
+        # Strip path separators and characters illegal on Windows so that
+        # arcnames don't accidentally create folders or collide.
+        cleaned = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", name).strip(" .") or "track"
+        return cleaned[:150]
+
     buf = io.BytesIO()
     added = 0
+    used_names = set()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for t in token_list:
             info = tokens.get(t)
@@ -301,7 +309,14 @@ def download_zip():
             path = info["path"]
             if not os.path.exists(path):
                 continue
-            filename = f"{info['title']}.mp3"
+            base = _safe_name(info["title"])
+            filename = f"{base}.mp3"
+            # De-duplicate so identical/sanitized-equal titles don't overwrite
+            n = 1
+            while filename in used_names:
+                n += 1
+                filename = f"{base} ({n}).mp3"
+            used_names.add(filename)
             zf.write(path, filename)
             added += 1
 
