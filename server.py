@@ -23,6 +23,10 @@ TOKEN_EXPIRY = 300  # 5 minutes
 jobs = {}
 jobs_lock = threading.Lock()
 
+# yt-dlp is not thread-safe (shared player/JS-interpreter caches), so
+# concurrent extract_info calls deadlock or hang. Serialize them.
+ytdlp_lock = threading.Lock()
+
 
 def cleanup_expired():
     """Remove expired tokens and their files every 60s."""
@@ -74,7 +78,7 @@ def auto_shutdown_watcher():
 
         # Don't shut down if there are active conversions
         with jobs_lock:
-            active = any(j["status"] == "converting" for j in jobs.values())
+            active = any(j["status"] in ("converting", "queued") for j in jobs.values())
 
         if active:
             touch_activity()
@@ -116,19 +120,31 @@ def run_conversion(job_id, video_url, token, output_path):
         }],
         "quiet": True,
         "no_warnings": True,
+        # If the URL carries a `list=` param (e.g. an auto-generated
+        # "radio" mix like list=RD...), yt-dlp will otherwise try to
+        # enumerate the entire — sometimes infinite — playlist and hang.
+        "noplaylist": True,
     }
 
     try:
-        print(f"  [CONVERT] Starting: {video_url}")
-
         with jobs_lock:
             if jobs[job_id]["status"] == "cancelled":
                 print(f"  [CONVERT] Cancelled before start: {job_id}")
                 return
+            jobs[job_id]["status"] = "queued"
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            title = info.get("title", "audio")
+        with ytdlp_lock:
+            with jobs_lock:
+                if jobs[job_id]["status"] == "cancelled":
+                    print(f"  [CONVERT] Cancelled while queued: {job_id}")
+                    return
+                jobs[job_id]["status"] = "converting"
+                jobs[job_id]["started_at"] = time.time()
+
+            print(f"  [CONVERT] Starting: {video_url}")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=True)
+                title = info.get("title", "audio")
 
         # Check if cancelled during download
         with jobs_lock:
@@ -219,7 +235,7 @@ def list_jobs():
                 "title": j.get("title", "Fetching..."),
                 "url": j.get("url", ""),
             }
-            if j["status"] == "converting":
+            if j["status"] in ("converting", "queued"):
                 entry["elapsed"] = int(time.time() - j["started_at"])
             if j["status"] == "done":
                 entry["download_url"] = j.get("download_url")
@@ -239,7 +255,7 @@ def cancel():
         job = jobs.get(job_id)
         if not job:
             return jsonify({"error": "Job not found"}), 404
-        if job["status"] != "converting":
+        if job["status"] not in ("converting", "queued"):
             return jsonify({"error": f"Job is already {job['status']}"}), 400
 
         job["status"] = "cancelled"
