@@ -167,8 +167,8 @@ function refreshJobs() {
 
     cachedJobs = response;
 
-    // Sort: converting first, then done, then errors
-    const order = { converting: 0, done: 1, error: 2, cancelled: 3 };
+    // Sort: converting first, then queued, done, errors
+    const order = { converting: 0, queued: 1, done: 2, error: 3, cancelled: 4 };
     response.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
 
     const doneCount = response.filter(j => j.status === "done").length;
@@ -182,6 +182,9 @@ function refreshJobs() {
 
       if (job.status === "converting") {
         meta = `${job.elapsed || 0}s elapsed`;
+        actions = `<button class="btn-small btn-stop" data-cancel="${job.job_id}">Stop</button>`;
+      } else if (job.status === "queued") {
+        meta = "Waiting in queue...";
         actions = `<button class="btn-small btn-stop" data-cancel="${job.job_id}">Stop</button>`;
       } else if (job.status === "done") {
         meta = "Ready to save";
