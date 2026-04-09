@@ -107,14 +107,20 @@ saveAllBtn.addEventListener("click", async () => {
     }
 
     const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+    // Convert to a data URL so the download survives the popup closing
+    // when the Save As dialog opens (blob: URLs from popup context get
+    // revoked the moment the popup unloads, producing an empty file).
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
 
-    chrome.downloads.download({
-      url: url,
+    await chrome.downloads.download({
+      url: dataUrl,
       filename: "yt-mp3-downloads.zip",
       saveAs: true,
-    }, () => {
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
     });
   } catch (err) {
     showStatus(`Zip error: ${err.message}`, "error");
